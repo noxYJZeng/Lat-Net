@@ -32,7 +32,7 @@ python predict.py \
 
 ## Example Output
 
-![output](./256x256_flow_imag)
+![output](./256x256_flow_image)
 
 ## Colab 
 
