@@ -36,4 +36,4 @@ python predict.py \
 
 ## Colab 
 
-(https://colab.research.google.com/drive/1rh3gxTINIBxC3q_hEnQbQ37rVQL87DwA?usp=sharing)
+https://colab.research.google.com/drive/1rh3gxTINIBxC3q_hEnQbQ37rVQL87DwA?usp=sharing
