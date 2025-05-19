@@ -32,7 +32,7 @@ python predict.py \
 
 ## Example Output
 
-![alt tag](https://github.com/noxYJZeng/Lat-Net/256x256_flow_imag.png)
+![output](./256x256_flow_imag)
 
 ## Colab 
 
