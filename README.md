@@ -1,4 +1,4 @@
-# Local Lat-Net: NPZ-Based 2D Flow Simulation
+# Lat-Net
 
 ## Overview
 
