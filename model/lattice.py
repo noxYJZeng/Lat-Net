@@ -1,7 +1,7 @@
 
 import tensorflow as tf
 import numpy as np
-from model.nn import int_shape, simple_conv_2d, simple_conv_3d, simple_trans_conv_2d, simple_trans_conv_3d
+from nn import int_shape, simple_conv_2d, simple_conv_3d, simple_trans_conv_2d, simple_trans_conv_3d
 
 # KERNEL matrixes for calculating velocity, magnetic field, and force
 VELOCITY_KERNEL_2D = np.zeros((3,3,2,1))
@@ -36,22 +36,22 @@ BOUNDARY_EDGE_KERNEL_3D[0,1,1,5 ,0] = 1.0 # down
 BOUNDARY_EDGE_KERNEL_3D[2,1,1,6 ,0] = 1.0 # up
 BOUNDARY_EDGE_KERNEL_3D[0,0,0,7 ,0] = 1.0 # down left out
 BOUNDARY_EDGE_KERNEL_3D[2,2,2,8 ,0] = 1.0 # up right in
-BOUNDARY_EDGE_KERNEL_3D[2,0,0,9 ,0] = 1.0 # down left in 
+BOUNDARY_EDGE_KERNEL_3D[2,0,0,9 ,0] = 1.0 # down left in
 BOUNDARY_EDGE_KERNEL_3D[0,2,2,10,0] = 1.0 # up right out
 BOUNDARY_EDGE_KERNEL_3D[0,2,0,11,0] = 1.0 # down right out
-BOUNDARY_EDGE_KERNEL_3D[2,0,2,12,0] = 1.0 # up left in 
-BOUNDARY_EDGE_KERNEL_3D[2,2,0,13,0] = 1.0 # down right in 
+BOUNDARY_EDGE_KERNEL_3D[2,0,2,12,0] = 1.0 # up left in
+BOUNDARY_EDGE_KERNEL_3D[2,2,0,13,0] = 1.0 # down right in
 BOUNDARY_EDGE_KERNEL_3D[0,0,2,14,0] = 1.0 # up left out
 
 def get_weights(lattice_size):
   # returns the lattice weights given the size of lattice
   if lattice_size == 9:
-    return tf.constant(np.array([4./9.,  1./9.,  1./9., 
+    return tf.constant(np.array([4./9.,  1./9.,  1./9.,
                                  1./9.,  1./9.,  1./36.,
                                  1./36., 1./36., 1./36.]), dtype=1)
   elif lattice_size == 15:
     return tf.constant(np.array([2./9.,  1./9.,  1./9.,
-                                 1./9.,  1./9.,  1./9., 
+                                 1./9.,  1./9.,  1./9.,
                                  1./9.,  1./72., 1./72.,
                                  1./72., 1./72., 1./72.,
                                  1./72., 1./72., 1./72.]), dtype=1)
@@ -59,12 +59,12 @@ def get_weights(lattice_size):
 def get_weights_numpy(lattice_size):
   # returns the lattice weights in numpy form given the size of lattice
   if lattice_size == 9:
-    return np.array([4./9.,  1./9.,  1./9., 
+    return np.array([4./9.,  1./9.,  1./9.,
                                  1./9.,  1./9.,  1./36.,
                                  1./36., 1./36., 1./36.])
   elif lattice_size == 15:
     return np.array([2./9.,  1./9.,  1./9.,
-                     1./9.,  1./9.,  1./9., 
+                     1./9.,  1./9.,  1./9.,
                      1./9.,  1./72., 1./72.,
                      1./72., 1./72., 1./72.,
                      1./72., 1./72., 1./72.])
@@ -153,11 +153,11 @@ def lattice_to_vel(lattice):
 
 def vel_to_norm(velocity):
   if len(velocity.get_shape()) == 4:
-    velocity_norm = tf.sqrt(tf.square(velocity[:,:,:,0:1]) + 
+    velocity_norm = tf.sqrt(tf.square(velocity[:,:,:,0:1]) +
                             tf.square(velocity[:,:,:,1:2]))
   else:
     velocity_norm = tf.sqrt(tf.square(velocity[:,:,:,:,0:1]) +
-                            tf.square(velocity[:,:,:,:,1:2]) + 
+                            tf.square(velocity[:,:,:,:,1:2]) +
                             tf.square(velocity[:,:,:,:,2:3]))
   return velocity_norm
 
@@ -195,11 +195,11 @@ def lattice_to_force(lattice, boundary):
   boundary_edge_kernel = get_edge_kernel(int(lattice.get_shape()[-1]))
   if len(boundary.get_shape()) == 4:
     # no padding because no overlap in on edges
-    edge = simple_trans_conv_2d(boundary,boundary_edge_kernel) 
+    edge = simple_trans_conv_2d(boundary,boundary_edge_kernel)
     edge = edge[:,1:-1,1:-1,:]
     boundary = boundary[:,1:-1,1:-1,:]
     lattice = lattice[:,1:-1,1:-1,:]
-  else: 
+  else:
     # need padding because overlap in on edges in 3D
     top = boundary[:,-1:]
     boundary = tf.concat([top, boundary], axis=1)
@@ -244,7 +244,7 @@ def lattice_to_magnetic(lattice):
   H1 = tf.reshape(H1, dims*[1] + H1_shape)
   H2 = tf.reshape(H2, dims*[1] + H1_shape)
   magnetic = tf.reduce_sum((H1 * m_1) + (H2 * m_2), axis=dims)
-  return magnetic 
+  return magnetic
 
 def field_to_norm(field):
   field_norm = tf.sqrt(tf.square(field[:,:,:,0:1]) + tf.square(field[:,:,:,1:2]) + tf.square(field[:,:,:,2:3]))

@@ -1,14 +1,9 @@
-
-"""functions used to construct different architectures  
-
-Several Functions have been borrowed and modified from https://github.com/openai/pixel-cnn
-"""
-
-
 import tensorflow as tf
 import numpy as np
+from absl import flags
 
-FLAGS = tf.app.flags.FLAGS
+tf.compat.v1.disable_eager_execution()
+FLAGS = flags.FLAGS
 
 def int_shape(x):
   return list(map(int, x.get_shape()))
@@ -37,7 +32,7 @@ def _activation_summary(x):
     tf.summary.scalar(tensor_name + '/sparsity', tf.nn.zero_fraction(x))
 
 def _variable(name, shape, initializer):
-  var = tf.get_variable(name, shape, initializer=initializer)
+  var = tf.compat.v1.get_variable(name, shape, initializer=initializer)
   _activation_summary(var)
   return var
 
@@ -78,9 +73,9 @@ def simple_conv_3d(x, k):
   return y
 
 def conv_layer(inputs, kernel_size, stride, num_features, padding, idx, nonlinearity=None):
-  with tf.variable_scope('{0}_conv'.format(idx)) as scope:
+  with tf.compat.v1.variable_scope('{0}_conv'.format(idx)) as scope:
     input_channels = int(inputs.get_shape()[-1])
-    
+
     # determine dim
     length_input = len(inputs.get_shape()) - 2
     if length_input not in [2, 3]:
@@ -88,8 +83,8 @@ def conv_layer(inputs, kernel_size, stride, num_features, padding, idx, nonlinea
       exit()
 
     # make variables
-    weights = _variable('weights', shape=length_input*[kernel_size] + [input_channels,num_features],initializer=tf.contrib.layers.xavier_initializer_conv2d())
-    biases = _variable('biases',[num_features],initializer=tf.contrib.layers.xavier_initializer_conv2d())
+    weights = _variable('weights', shape=length_input*[kernel_size] + [input_channels,num_features], initializer=tf.compat.v1.glorot_uniform_initializer())
+    biases = _variable('biases',[num_features],initializer=tf.compat.v1.glorot_uniform_initializer())
 
     # pad it mobius
     inputs = mobius_pad(inputs, padding)
@@ -106,22 +101,22 @@ def conv_layer(inputs, kernel_size, stride, num_features, padding, idx, nonlinea
 
 def simple_trans_conv_2d(x, k):
   """A simplified 2D trans convolution operation"""
-  output_shape = tf.stack([tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(k)[2]]) 
+  output_shape = tf.stack([tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(k)[2]])
   y = tf.nn.conv2d_transpose(x, k, output_shape, [1, 1, 1, 1], padding='SAME')
   y = tf.reshape(y, [int(x.get_shape()[0]), int(x.get_shape()[1]), int(x.get_shape()[2]), int(k.get_shape()[2])])
   return y
 
 def simple_trans_conv_3d(x, k):
   """A simplified 3D trans convolution operation"""
-  output_shape = tf.stack([tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3], tf.shape(k)[3]]) 
+  output_shape = tf.stack([tf.shape(x)[0], tf.shape(x)[1], tf.shape(x)[2], tf.shape(x)[3], tf.shape(k)[3]])
   y = tf.nn.conv3d_transpose(x, k, output_shape, [1, 1, 1, 1, 1], padding='SAME')
   y = tf.reshape(y, [int(x.get_shape()[0]), int(x.get_shape()[1]), int(x.get_shape()[2]), int(x.get_shape()[3]), int(k.get_shape()[3])])
   return y
 
 def transpose_conv_layer(inputs, kernel_size, stride, num_features, padding, idx, nonlinearity=None):
-  with tf.variable_scope('{0}_trans_conv'.format(idx)) as scope:
+  with tf.compat.v1.variable_scope('{0}_trans_conv'.format(idx)) as scope:
     input_channels = int(inputs.get_shape()[-1])
-     
+
     # determine dim
     length_input = len(inputs.get_shape()) - 2
     batch_size = tf.shape(inputs)[0]
@@ -130,18 +125,17 @@ def transpose_conv_layer(inputs, kernel_size, stride, num_features, padding, idx
       exit()
 
     # make variables
-    weights = _variable('weights', shape=length_input*[kernel_size] + [num_features,input_channels],initializer=tf.contrib.layers.xavier_initializer_conv2d())
-    biases = _variable('biases',[num_features],initializer=tf.contrib.layers.xavier_initializer_conv2d())
+    weights = _variable('weights', shape=length_input*[kernel_size] + [num_features,input_channels],initializer=tf.compat.v1.glorot_uniform_initializer())
+    biases = _variable('biases',[num_features],initializer=tf.compat.v1.glorot_uniform_initializer())
 
-    # pad it mobius
     inputs_pad = mobius_pad(inputs, padding)
 
     if length_input == 2:
-      output_shape = tf.stack([tf.shape(inputs_pad)[0], tf.shape(inputs_pad)[1]*stride, tf.shape(inputs_pad)[2]*stride, num_features]) 
+      output_shape = tf.stack([tf.shape(inputs_pad)[0], tf.shape(inputs_pad)[1]*stride, tf.shape(inputs_pad)[2]*stride, num_features])
       conv = tf.nn.conv2d_transpose(inputs_pad, weights, output_shape, strides=[1,stride,stride,1], padding='SAME')
       conv = conv[:,2:-2,2:-2]
     elif length_input == 3:
-      output_shape = tf.stack([tf.shape(inputs)[0], tf.shape(inputs_pad)[1]*stride, tf.shape(inputs_pad)[2]*stride, tf.shape(inputs_pad)[3]*stride, num_features]) 
+      output_shape = tf.stack([tf.shape(inputs)[0], tf.shape(inputs_pad)[1]*stride, tf.shape(inputs_pad)[2]*stride, tf.shape(inputs_pad)[3]*stride, num_features])
       conv = tf.nn.conv3d_transpose(inputs_pad, weights, output_shape, strides=[1,stride,stride,stride,1], padding='SAME')
       conv = conv[:,2:-2,2:-2,2:-2]
 
@@ -149,7 +143,6 @@ def transpose_conv_layer(inputs, kernel_size, stride, num_features, padding, idx
     if nonlinearity is not None:
       conv_biased = nonlinearity(conv_biased)
 
-    #reshape (transpose conv causes output to have ? size)
     shape = int_shape(inputs)
     if  length_input == 2:
       conv_biased = tf.reshape(conv_biased, [shape[0], shape[1]*stride, shape[2]*stride, num_features])
@@ -159,7 +152,7 @@ def transpose_conv_layer(inputs, kernel_size, stride, num_features, padding, idx
     return conv_biased
 
 def fc_layer(inputs, hiddens, idx, nonlinearity=None, flat = False):
-  with tf.variable_scope('{0}_fc'.format(idx)) as scope:
+  with tf.compat.v1.variable_scope('{0}_fc'.format(idx)) as scope:
     input_shape = inputs.get_shape().as_list()
     if flat:
       dim = input_shape[1]*input_shape[2]*input_shape[3]
@@ -167,9 +160,9 @@ def fc_layer(inputs, hiddens, idx, nonlinearity=None, flat = False):
     else:
       dim = input_shape[1]
       inputs_processed = inputs
-    
-    weights = _variable('weights', shape=[dim,hiddens],initializer=tf.contrib.layers.xavier_initializer())
-    biases = _variable('biases', [hiddens], initializer=tf.contrib.layers.xavier_initializer())
+
+    weights = _variable('weights', shape=[dim,hiddens],initializer=tf.compat.v1.glorot_uniform_initializer())
+    biases = _variable('biases', [hiddens], initializer=tf.compat.v1.glorot_uniform_initializer())
     output_biased = tf.add(tf.matmul(inputs_processed,weights),biases,name=str(idx)+'_fc')
     if nonlinearity is not None:
       output_biased = nonlinearity(ouput_biased)
@@ -221,18 +214,18 @@ def trim_tensor(tensor, pos, width, trim_type):
     elif trim_type == "plane":
       tensor = tensor[:,pos-width:pos+width+1]
   else:
-    print("tensor size not supported") 
+    print("tensor size not supported")
     exit()
   return tensor
 
 def res_block(x, a=None, filter_size=16, nonlinearity=concat_elu, keep_p=1.0, stride=1, gated=False,  padding=["mobius", "mobius"], name="resnet", begin_nonlinearity=True):
-      
+
   # determine if 2d or 3d trans conv is needed
   length_input = len(x.get_shape())
 
   orig_x = x
-  if begin_nonlinearity: 
-    x = nonlinearity(x) 
+  if begin_nonlinearity:
+    x = nonlinearity(x)
   if stride == 1:
     x = conv_layer(x, 3, stride, filter_size, padding, name + '_conv_1')
   elif stride == 2:
@@ -241,7 +234,7 @@ def res_block(x, a=None, filter_size=16, nonlinearity=concat_elu, keep_p=1.0, st
     print("stride > 2 is not supported")
     exit()
   if a is not None:
-    shape_a = int_shape(a) 
+    shape_a = int_shape(a)
     shape_x_1 = int_shape(x)
     if length_input == 4:
       a = tf.pad(
@@ -284,31 +277,3 @@ def res_block(x, a=None, filter_size=16, nonlinearity=concat_elu, keep_p=1.0, st
     orig_x = nin(orig_x, out_filter, name + '_nin_pad')
 
   return orig_x + x
-
-"""
-def res_block_lstm(x, hidden_state_1=None, hidden_state_2=None, keep_p=1.0, name="resnet_lstm"):
-
-  orig_x = x
-  filter_size = orig_x.get_shape()
-
-  with tf.variable_scope(name + "_conv_LSTM_1", initializer = tf.random_uniform_initializer(-0.01, 0.01)):
-    lstm_cell_1 = BasicConvLSTMCell.BasicConvLSTMCell([int(x.get_shape()[1]),int(x.get_shape()[2])], [3,3], filter_size)
-    if hidden_state_1 == None:
-      batch_size = x.get_shape()[0]
-      hidden_state_1 = lstm_cell_1.zero_state(batch_size, tf.float32) 
-
-  x_1, hidden_state_1 = lstm_cell_1(x, hidden_state_1)
-    
-  if keep_p < 1.0:
-    x_1 = tf.nn.dropout(x_1, keep_prob=keep_p)
-
-  with tf.variable_scope(name + "_conv_LSTM_2", initializer = tf.random_uniform_initializer(-0.01, 0.01)):
-    lstm_cell_2 = BasicConvLSTMCell.BasicConvLSTMCell([int(x_1.get_shape()[1]),int(x_1.get_shape()[2])], [3,3], filter_size)
-    if hidden_state_2 == None:
-      batch_size = x_1.get_shape()[0]
-      hidden_state_2 = lstm_cell_2.zero_state(batch_size, tf.float32) 
-
-  x_2, hidden_state_2 = lstm_cell_2(x_1, hidden_state_2)
-
-  return orig_x + x_2, hidden_state_1, hidden_state_2
-"""

@@ -4,99 +4,57 @@
 
 import tensorflow as tf
 import numpy as np
-from divergence import *
-
-
-FLAGS = tf.app.flags.FLAGS
+from .divergence import *
 
 
 def loss_mse(true, generated):
-  loss = tf.nn.l2_loss(true - generated)
-  return loss
- 
+    """Mean-squared error loss between true and generated fields."""
+    return tf.nn.l2_loss(true - generated)
+
 def loss_divergence(true_field, generated_field):
-  if len(true_field.get_shape()) == 5:
-    true_field_div = spatial_divergence_2d(true_field)
-    generated_field_div = spatial_divergence_2d(generated_field)
-  if len(true_field.get_shape()) == 6:
-    true_field_div = spatial_divergence_3d(true_field)
-    generated_field_div = spatial_divergence_3d(generated_field)
-  loss = tf.abs(tf.nn.l2_loss(true_field_div) - tf.nn.l2_loss(generated_field_div))
-  return loss
+    """
+    Enforces divergence-free velocity field by comparing divergence magnitudes.
+    Assumes input shape: [batch, sequence, height, width, channels].
+    """
+    true_div = spatial_divergence_2d(true_field)
+    pred_div = spatial_divergence_2d(generated_field)
+    return tf.abs(tf.nn.l2_loss(true_div) - tf.nn.l2_loss(pred_div))
 
 def loss_gradient_difference(true, generated):
-  # seen in here https://arxiv.org/abs/1511.05440
-  if len(true.get_shape()) == 5:
-    true_x_shifted_right = true[:,:,1:,:,:]
-    true_x_shifted_left = true[:,:,:-1,:,:]
-    true_x_gradient = tf.abs(true_x_shifted_right - true_x_shifted_left)
+    """
+    Gradient difference loss based on local spatial derivatives.
+    Input shape: [batch, sequence, height, width, channels]
+    """
+    true_dx = tf.abs(true[:, :, :, 1:, :] - true[:, :, :, :-1, :])
+    pred_dx = tf.abs(generated[:, :, :, 1:, :] - generated[:, :, :, :-1, :])
+    loss_x = tf.nn.l2_loss(true_dx - pred_dx)
 
-    generated_x_shifted_right = generated[:,:,1:,:,:]
-    generated_x_shifted_left = generated[:,:,:-1,:,:]
-    generated_x_gradient = tf.abs(generated_x_shifted_right - generated_x_shifted_left)
+    true_dy = tf.abs(true[:, :, 1:, :, :] - true[:, :, :-1, :, :])
+    pred_dy = tf.abs(generated[:, :, 1:, :, :] - generated[:, :, :-1, :, :])
+    loss_y = tf.nn.l2_loss(true_dy - pred_dy)
 
-    loss_x_gradient = tf.nn.l2_loss(true_x_gradient - generated_x_gradient)
-
-    true_y_shifted_right = true[:,:,:,1:,:]
-    true_y_shifted_left = true[:,:,:,:-1,:]
-    true_y_gradient = tf.abs(true_y_shifted_right - true_y_shifted_left)
-
-    generated_y_shifted_right = generated[:,:,:,1:,:]
-    generated_y_shifted_left = generated[:,:,:,:-1,:]
-    generated_y_gradient = tf.abs(generated_y_shifted_right - generated_y_shifted_left)
-    
-    loss_y_gradient = tf.nn.l2_loss(true_y_gradient - generated_y_gradient)
-
-    loss = loss_x_gradient + loss_y_gradient
-
-  else:
-    true_x_shifted_right = true[:,:,1:,:,:,:]
-    true_x_shifted_left = true[:,:,:-1,:,:,:]
-    true_x_gradient = tf.abs(true_x_shifted_right - true_x_shifted_left)
-
-    generated_x_shifted_right = generated[:,:,1:,:,:,:]
-    generated_x_shifted_left = generated[:,:,:-1,:,:,:]
-    generated_x_gradient = tf.abs(generated_x_shifted_right - generated_x_shifted_left)
-
-    loss_x_gradient = tf.nn.l2_loss(true_x_gradient - generated_x_gradient)
-
-    true_y_shifted_right = true[:,:,:,1:,:,:]
-    true_y_shifted_left = true[:,:,:,:-1,:,:]
-    true_y_gradient = tf.abs(true_y_shifted_right - true_y_shifted_left)
-
-    generated_y_shifted_right = generated[:,:,:,1:,:,:]
-    generated_y_shifted_left = generated[:,:,:,:-1,:,:]
-    generated_y_gradient = tf.abs(generated_y_shifted_right - generated_y_shifted_left)
-    
-    loss_y_gradient = tf.nn.l2_loss(true_y_gradient - generated_y_gradient)
-
-    true_z_shifted_right = true[:,:,:,:,1:,:]
-    true_z_shifted_left = true[:,:,:,:,:-1,:]
-    true_z_gradient = tf.abs(true_z_shifted_right - true_z_shifted_left)
-
-    generated_z_shifted_right = generated[:,:,:,:,1:,:]
-    generated_z_shifted_left = generated[:,:,:,:,:-1,:]
-    generated_z_gradient = tf.abs(generated_z_shifted_right - generated_z_shifted_left)
-    
-    loss_z_gradient = tf.nn.l2_loss(true_z_gradient - generated_z_gradient)
-
-    loss = loss_x_gradient + loss_y_gradient + loss_z_gradient
-
-  return loss
+    return loss_x + loss_y
 
 def loss_gan_true(true_label, generated_label):
-  loss_d_true = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(true_label, tf.ones_like(true_label)))
-  loss_d_generated = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(generated_label, tf.ones_like(generated_label)))
-  loss_d = loss_d_true + loss_d_generated
-  tf.summary.scalar('error discriminator true', loss_d_true)
-  tf.summary.scalar('error discriminator generated', loss_d_generated)
-  tf.summary.scalar('error discriminator', loss_d)
-  return loss_d
- 
+    d_true = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=true_label, labels=tf.ones_like(true_label)))
+    d_fake = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=generated_label, labels=tf.zeros_like(generated_label)))
+    d_loss = d_true + d_fake
+
+    tf.summary.scalar('discriminator_true_loss', d_true)
+    tf.summary.scalar('discriminator_fake_loss', d_fake)
+    tf.summary.scalar('discriminator_total_loss', d_loss)
+    return d_loss
+
 def loss_gan_generated(generated_label):
-  error_g = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(generated_label, tf.ones_like(generated_label))) 
-  tf.summary.scalar('error generated', error_g)
-  return loss_g
+    g_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=generated_label, labels=tf.ones_like(generated_label)))
+    tf.summary.scalar('generator_loss', g_loss)
+    return g_loss
 
+def loss_ssim(true, pred, max_val=1.0):
+    ssim = tf.image.ssim(true, pred, max_val=max_val)
+    return 1.0 - tf.reduce_mean(ssim)
 
-
+def total_loss(true, pred, alpha=0.8, beta=0.2):
+    mse = loss_mse(true, pred)
+    ssim_component = loss_ssim(true, pred, max_val=1.0)
+    return alpha * mse + beta * ssim_component
