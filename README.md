@@ -33,3 +33,7 @@ python predict.py \
 ## Example Output
 
 ![alt tag](https://github.com/noxYJZeng/Lat-Net/256x256_flow_imag.png)
+
+## Colab 
+
+[This is a Colab version] (https://colab.research.google.com/drive/1rh3gxTINIBxC3q_hEnQbQ37rVQL87DwA?usp=sharing)
